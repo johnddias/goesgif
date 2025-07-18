@@ -1,64 +1,93 @@
 import os
 import sys
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from wand.image import Image as WandImage
 import re
 import progressbar
 
-def find_images(time_threshold, input_dir):
-    time_threshold_date = datetime.utcnow() - timedelta(hours=time_threshold)
+def find_images(time_threshold, input_dir, allowed_satellites):
+    time_threshold_date = datetime.now(timezone.utc) - timedelta(hours=time_threshold)
     files = []
     for root, _, filenames in os.walk(input_dir):
         for filename in filenames:
             if filename.startswith("GOES") and len(filename) > 5 and filename[4:6].isdigit():
                 match = re.search(r"_(\d{8}T\d{6}Z)\.jpg$", filename)
                 if match:
-                    time_part = datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ")
+                    satellite = filename.split("_")[0]
+                    if allowed_satellites != 'all' and satellite not in allowed_satellites.split(','):
+                        continue
+                    time_part = datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
                     if time_part > time_threshold_date:
-                        files.append((os.path.join(root, filename), time_part))
-    # Sort files by timestamp (oldest to newest)
+                        files.append((os.path.join(root, filename), time_part, satellite))
     files.sort(key=lambda x: x[1])
-    return [f[0] for f in files]
+    return files
 
-def create_gifs(files, output_dir, resize_percentage, region, channels, include_enhanced, convert_delay, convert_loop):
+def create_gifs(files, output_dir, resize_percentage, region, channels,
+                include_enhanced, convert_delay, convert_loop, log_file):
     widgets = [progressbar.Percentage(), ' ', progressbar.Bar(), ' ', progressbar.ETA()]
     bar = progressbar.ProgressBar(widgets=widgets, maxval=len(files))
     bar.start()
-    for i, file_path in enumerate(files):
+
+    log = open(log_file, 'w') if log_file else None
+    last_timestamp = {}
+
+    for i, (file_path, timestamp, satellite) in enumerate(files):
         filename = os.path.basename(file_path)
         parts = filename.split("_")
         img_region = parts[1]
         img_channel = parts[2] + ("_enhanced" if len(parts) > 3 and parts[3] == "enhanced" else "")
-        if region == 'all' or region == img_region:
-            if channels == 'all' or any([ch in img_channel for ch in channels.split(',')]):
-                output_folder = os.path.join(output_dir, img_region, img_channel)
-                os.makedirs(output_folder, exist_ok=True)
-                output_file = os.path.join(output_folder, f"output_{img_region}_{img_channel}.gif")
-                if '_enhanced' in img_channel and not include_enhanced:
-                    continue  # Skip processing enhanced channels if not specified
-                with WandImage(filename=file_path) as img:
-                    # Resize the image
-                    img.resize(int(img.width * (resize_percentage / 100)), int(img.height * (resize_percentage / 100)))
-                    # Save the resized image
-                    resized_file_path = os.path.join(output_folder, filename)
-                    img.save(filename=resized_file_path)
-                    # Convert the resized image to GIF and append to the existing GIF if it exists
-                    if os.path.exists(output_file):
-                        with WandImage(filename=output_file) as existing_gif:
-                            existing_gif.sequence.append(img)
-                            existing_gif.save(filename=output_file)
-                    else:
-                        with WandImage() as new_gif:
-                            new_gif.sequence.append(img)
-                            new_gif.save(filename=output_file)
-                    # Remove the resized image file
-                    os.remove(resized_file_path)
-        bar.update(i+1)
-    bar.finish
+
+        if region != 'all' and region != img_region:
+            bar.update(i + 1)
+            continue
+        if channels != 'all' and not any([ch in img_channel for ch in channels.split(',')]):
+            bar.update(i + 1)
+            continue
+        if '_enhanced' in img_channel and not include_enhanced:
+            bar.update(i + 1)
+            continue
+
+        key = (satellite, img_region, img_channel)
+        output_folder = os.path.join(output_dir, satellite, img_region, img_channel)
+        os.makedirs(output_folder, exist_ok=True)
+        output_file = os.path.join(output_folder, f"output_{satellite}_{img_region}_{img_channel}.gif")
+
+        if log:
+            log.write(f"{file_path} -> {output_file}\n")
+            if key in last_timestamp:
+                gap = (timestamp - last_timestamp[key]).total_seconds()
+                if gap > convert_delay / 1000.0 + 300:  # more than ~5 minutes, assuming 5 min cadence
+                    log.write(f"  ⚠ Gap detected: {gap/60:.1f} min between frames\n")
+            last_timestamp[key] = timestamp
+
+        with WandImage(filename=file_path) as img:
+            img.resize(
+                int(img.width * (resize_percentage / 100)),
+                int(img.height * (resize_percentage / 100))
+            )
+            resized_file_path = os.path.join(output_folder, filename)
+            img.save(filename=resized_file_path)
+
+            if os.path.exists(output_file):
+                with WandImage(filename=output_file) as existing_gif:
+                    existing_gif.sequence.append(img)
+                    existing_gif.save(filename=output_file)
+            else:
+                with WandImage() as new_gif:
+                    new_gif.sequence.append(img)
+                    new_gif.save(filename=output_file)
+
+            os.remove(resized_file_path)
+
+        bar.update(i + 1)
+
+    bar.finish()
+    if log:
+        log.close()
 
 def main():
-    parser = argparse.ArgumentParser(description='Create GIFs from images.')
+    parser = argparse.ArgumentParser(description='Create GIFs from GOES satellite images.')
     parser.add_argument('input_dir', type=str, help='Input directory containing images')
     parser.add_argument('output_dir', type=str, help='Output directory for GIFs')
     parser.add_argument('--time_threshold', type=int, default=24, help='Time threshold in hours (default: 24)')
@@ -66,8 +95,11 @@ def main():
     parser.add_argument('--region', type=str, default='all', help='Region to process (FD, M1, M2)')
     parser.add_argument('--channels', type=str, default='all', help='Channels to process (comma-separated list)')
     parser.add_argument('--include_enhanced', action='store_true', help='Include enhanced channels')
-    parser.add_argument('--convert_delay', type=int, default=100, help='Delay between frames in the GIF (default: 100)')
-    parser.add_argument('--convert_loop', type=int, default=0, help='Number of times the GIF should loop (default: 0, loop indefinitely)')
+    parser.add_argument('--convert_delay', type=int, default=100, help='Delay between frames in the GIF (default: 100ms)')
+    parser.add_argument('--convert_loop', type=int, default=0, help='Number of times the GIF should loop (0 = infinite)')
+    parser.add_argument('--log_file', type=str, default=None, help='Path to log file listing included images and gaps')
+    parser.add_argument('--satellites', type=str, default='all', help='Comma-separated list of satellites to include (e.g., GOES18,GOES19)')
+
     args = parser.parse_args()
 
     if not os.path.exists(args.input_dir):
@@ -75,7 +107,7 @@ def main():
         sys.exit(1)
 
     print("Finding images...")
-    files = find_images(args.time_threshold, args.input_dir)
+    files = find_images(args.time_threshold, args.input_dir, args.satellites)
     print(f"Found {len(files)} images.")
 
     if len(files) == 0:
@@ -83,10 +115,12 @@ def main():
         sys.exit(0)
 
     print("Creating GIFs...")
-    create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels, args.include_enhanced,
-                args.convert_delay, args.convert_loop)
+    create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
+    if args.log_file:
+        print(f"Log written to {args.log_file}")
 
 if __name__ == "__main__":
     main()

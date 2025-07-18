@@ -1,79 +1,63 @@
-# GOES GIF Creator
+# GOES Image GIF Generator
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
-
-Create animated GIFs from GOES satellite images: visualize weather events, cloud motion, and more.
-
-## Overview
-
-GOES GIF Creator helps you turn batches of [GOES](https://www.goes.noaa.gov/) (Geostationary Operational Environmental Satellites) images into time-lapse GIFs. Useful for meteorologists, enthusiasts, researchers, and educators who want a quick way to visualize satellite data.
+This script processes GOES satellite `.jpg` images and generates animated GIFs grouped by satellite, region, and channel. It supports filtering by satellite, time range, and channel; resizing images; and detecting time gaps between frames.
 
 ## Features
 
-- Select region (FD, M1, M2)
-- Filter by channels (e.g., CH07, CH13)
-- Resize images and set delay/loop for GIFs
-- Optional: Include enhanced channels
-- Fast batch processing
+- Supports multiple GOES satellites (GOES16, GOES18, GOES19, etc.)
+- Recursively finds GOES image files modified within the last N hours
+- Filters by satellite, region, channel, and enhancement
+- Resizes images before GIF creation
+- Logs processed images and detects time gaps in sequence
+- Organizes GIFs by satellite/region/channel
+- Progress bar during processing
 
-## Prerequisites
+## Requirements
 
-- Python 3.8+
-- [pip](https://pip.pypa.io/en/stable/installation/)
-- GOES satellite image files (supported formats: PNG, JPEG)
+Install Python dependencies:
 
-## Installation
+```bash
+pip install -r requirements.txt
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/johnddias/goesgif.git
-   cd goesgif
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+And make sure [ImageMagick](https://imagemagick.org) is installed (required by `wand`).
 
 ## Usage
 
 ```bash
-python goesgif.py <input_dir> <output_dir> [--options]
+python goesgif_with_satellite_filter_and_gap_detection.py INPUT_DIR OUTPUT_DIR [options]
 ```
+
+### Required Arguments
+
+- `INPUT_DIR`: Path to the directory containing GOES `.jpg` images
+- `OUTPUT_DIR`: Directory where the output GIFs will be saved
 
 ### Options
 
-- `--time_threshold` &nbsp; Time threshold in hours (default: 24)
-- `--resize_percentage` &nbsp; Resize percentage (default: 25)
-- `--region` &nbsp; Region to process (`FD`, `M1`, `M2`)
-- `--channels` &nbsp; Comma-separated channels (default: all)
-- `--include_enhanced` &nbsp; Include enhanced channels
-- `--convert_delay` &nbsp; Delay between frames in the GIF (default: 100 ms)
-- `--convert_loop` &nbsp; Number of times the GIF should loop (default: 0, infinite)
+| Option | Description |
+|--------|-------------|
+| `--time_threshold HOURS` | Look for images modified within the past N hours (default: 24) |
+| `--resize_percentage PERCENT` | Resize image by percentage before generating GIF (default: 25) |
+| `--region REGION` | Region to process: `FD`, `M1`, `M2`, or `all` (default: all) |
+| `--channels CH1,CH2,...` | Comma-separated list of channels (e.g., `CH13,CH02`) or `all` |
+| `--satellites SAT1,SAT2,...` | Comma-separated list of satellites to include (e.g., `GOES18,GOES19`) or `all` |
+| `--include_enhanced` | Include images with `_enhanced` in channel name |
+| `--convert_delay MS` | Frame delay in milliseconds (default: 100) |
+| `--convert_loop N` | Number of times the GIF should loop (`0` = infinite) |
+| `--log_file FILE` | Log file to write list of included images and detected time gaps |
 
 ### Example
 
 ```bash
-python goesgif.py /path/to/input_images /path/to/output_gifs --region FD --channels CH07,CH13 --include_enhanced
+python goesgif_with_satellite_filter_and_gap_detection.py ./images ./gifs \
+  --time_threshold 36 \
+  --resize_percentage 50 \
+  --region FD \
+  --channels CH13 \
+  --satellites GOES19 \
+  --include_enhanced \
+  --log_file goesgif.log
 ```
 
-### Sample Output
-
-- `/path/to/output_gifs/FD_CH07_CH13.gif`
-
-## Troubleshooting
-
-- **Missing dependencies?**  
-  Re-run `pip install -r requirements.txt`.
-- **No images processed?**  
-  Check that your input directory contains supported image files and correct region/channel options.
-
-## Contributing
-
-Pull requests, feature suggestions, and bug reports are welcome!  
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## License
-
-Licensed under the [Apache 2.0 License](LICENSE).
+This will create a GIF for `GOES19` Full Disk `CH13` images (including enhanced versions) within the last 36 hours, resize them to 50%, and log the process to `goesgif.log`.
