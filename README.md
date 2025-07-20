@@ -27,7 +27,7 @@ Make sure [ImageMagick](https://imagemagick.org) is installed and accessible (re
 ## Usage
 
 ```bash
-python goesgif_timestamp_overlay.py INPUT_DIR OUTPUT_DIR [options]
+python goesgif.py INPUT_DIR OUTPUT_DIR [options]
 ```
 
 ### Required Arguments
@@ -53,7 +53,7 @@ python goesgif_timestamp_overlay.py INPUT_DIR OUTPUT_DIR [options]
 ### Example
 
 ```bash
-python goesgif_timestamp_overlay.py ./images ./gifs \
+python goesgif.py ./images ./gifs \
   --time_threshold 36 \
   --resize_percentage 50 \
   --region FD \
