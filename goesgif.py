@@ -2,9 +2,13 @@ import os
 import sys
 import argparse
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from wand.image import Image as WandImage
+from wand.drawing import Drawing
+from wand.color import Color
 import re
 import progressbar
+from collections import defaultdict
 
 def find_images(time_threshold, input_dir, allowed_satellites):
     time_threshold_date = datetime.now(timezone.utc) - timedelta(hours=time_threshold)
@@ -23,64 +27,83 @@ def find_images(time_threshold, input_dir, allowed_satellites):
     files.sort(key=lambda x: x[1])
     return files
 
+def draw_timestamp(img, timestamp, tz_label):
+    timestamp_str = timestamp.strftime(f"%Y-%m-%d %H:%M {tz_label}")
+    with Drawing() as draw:
+        draw.font_size = 20
+        draw.fill_color = Color("white")
+        draw.stroke_color = Color("black")
+        draw.text_antialias = True
+        draw.text(10, img.height - 10, timestamp_str)
+        draw(img)
+
 def create_gifs(files, output_dir, resize_percentage, region, channels,
-                include_enhanced, convert_delay, convert_loop, log_file):
-    widgets = [progressbar.Percentage(), ' ', progressbar.Bar(), ' ', progressbar.ETA()]
-    bar = progressbar.ProgressBar(widgets=widgets, maxval=len(files))
-    bar.start()
-
+                include_enhanced, convert_delay, convert_loop, log_file, user_timezone):
+    grouped = defaultdict(list)
     log = open(log_file, 'w') if log_file else None
-    last_timestamp = {}
 
-    for i, (file_path, timestamp, satellite) in enumerate(files):
+    tz = ZoneInfo(user_timezone)
+    tz_label = tz.key.split("/")[-1].replace("_", " ")
+
+    for file_path, timestamp, satellite in files:
         filename = os.path.basename(file_path)
         parts = filename.split("_")
         img_region = parts[1]
         img_channel = parts[2] + ("_enhanced" if len(parts) > 3 and parts[3] == "enhanced" else "")
 
         if region != 'all' and region != img_region:
-            bar.update(i + 1)
             continue
         if channels != 'all' and not any([ch in img_channel for ch in channels.split(',')]):
-            bar.update(i + 1)
             continue
         if '_enhanced' in img_channel and not include_enhanced:
-            bar.update(i + 1)
             continue
 
         key = (satellite, img_region, img_channel)
+        grouped[key].append((file_path, timestamp))
+
+    total_files = sum(len(g) for g in grouped.values())
+    bar = progressbar.ProgressBar(widgets=[progressbar.Percentage(), ' ', progressbar.Bar(), ' ', progressbar.ETA()], maxval=total_files)
+    bar.start()
+    count = 0
+
+    for (satellite, img_region, img_channel), group in grouped.items():
         output_folder = os.path.join(output_dir, satellite, img_region, img_channel)
         os.makedirs(output_folder, exist_ok=True)
         output_file = os.path.join(output_folder, f"output_{satellite}_{img_region}_{img_channel}.gif")
 
-        if log:
-            log.write(f"{file_path} -> {output_file}\n")
-            if key in last_timestamp:
-                gap = (timestamp - last_timestamp[key]).total_seconds()
-                if gap > convert_delay / 1000.0 + 300:  # more than ~5 minutes, assuming 5 min cadence
-                    log.write(f"  ⚠ Gap detected: {gap/60:.1f} min between frames\n")
-            last_timestamp[key] = timestamp
+        frames = []
+        last_time = None
 
-        with WandImage(filename=file_path) as img:
-            img.resize(
-                int(img.width * (resize_percentage / 100)),
-                int(img.height * (resize_percentage / 100))
-            )
-            resized_file_path = os.path.join(output_folder, filename)
-            img.save(filename=resized_file_path)
+        for file_path, timestamp in group:
+            with WandImage(filename=file_path) as img:
+                img.resize(
+                    int(img.width * (resize_percentage / 100)),
+                    int(img.height * (resize_percentage / 100))
+                )
+                local_time = timestamp.astimezone(tz)
+                draw_timestamp(img, local_time, tz_label)
+                img.delay = convert_delay // 10
+                frames.append(img.clone())
 
-            if os.path.exists(output_file):
-                with WandImage(filename=output_file) as existing_gif:
-                    existing_gif.sequence.append(img)
-                    existing_gif.save(filename=output_file)
-            else:
-                with WandImage() as new_gif:
-                    new_gif.sequence.append(img)
-                    new_gif.save(filename=output_file)
+            if log:
+                log.write(f"{file_path} -> {output_file}\n")
+                if last_time:
+                    gap = (timestamp - last_time).total_seconds()
+                    if gap > convert_delay / 1000.0 + 300:
+                        log.write(f"  ⚠ Gap detected: {gap/60:.1f} min between frames\n")
+                last_time = timestamp
 
-            os.remove(resized_file_path)
+            count += 1
+            bar.update(count)
 
-        bar.update(i + 1)
+        if frames:
+            with WandImage() as gif:
+                gif.sequence.extend(frames)
+                for frame in gif.sequence:
+                    frame.delay = convert_delay // 10
+                gif.type = 'optimize'
+                gif.loop = convert_loop
+                gif.save(filename=output_file)
 
     bar.finish()
     if log:
@@ -99,6 +122,7 @@ def main():
     parser.add_argument('--convert_loop', type=int, default=0, help='Number of times the GIF should loop (0 = infinite)')
     parser.add_argument('--log_file', type=str, default=None, help='Path to log file listing included images and gaps')
     parser.add_argument('--satellites', type=str, default='all', help='Comma-separated list of satellites to include (e.g., GOES18,GOES19)')
+    parser.add_argument('--timezone', type=str, default='UTC', help='Timezone for timestamp overlay (default: UTC)')
 
     args = parser.parse_args()
 
@@ -116,7 +140,7 @@ def main():
 
     print("Creating GIFs...")
     create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
-                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file)
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
     if args.log_file:

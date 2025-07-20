@@ -1,6 +1,6 @@
 # GOES Image GIF Generator
 
-This script processes GOES satellite `.jpg` images and generates animated GIFs grouped by satellite, region, and channel. It supports filtering by satellite, time range, and channel; resizing images; and detecting time gaps between frames.
+This script processes GOES satellite `.jpg` images and generates animated GIFs grouped by satellite, region, and channel. It supports filtering by satellite, time range, and channel; resizing images; detecting time gaps between frames; and overlaying timestamps on each frame.
 
 ## Features
 
@@ -9,6 +9,8 @@ This script processes GOES satellite `.jpg` images and generates animated GIFs g
 - Filters by satellite, region, channel, and enhancement
 - Resizes images before GIF creation
 - Logs processed images and detects time gaps in sequence
+- Adds timestamp overlays to each frame
+- Timezone-aware timestamp formatting
 - Organizes GIFs by satellite/region/channel
 - Progress bar during processing
 
@@ -20,12 +22,12 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
-And make sure [ImageMagick](https://imagemagick.org) is installed (required by `wand`).
+Make sure [ImageMagick](https://imagemagick.org) is installed and accessible (required by `wand`).
 
 ## Usage
 
 ```bash
-python goesgif_with_satellite_filter_and_gap_detection.py INPUT_DIR OUTPUT_DIR [options]
+python goesgif_timestamp_overlay.py INPUT_DIR OUTPUT_DIR [options]
 ```
 
 ### Required Arguments
@@ -46,18 +48,20 @@ python goesgif_with_satellite_filter_and_gap_detection.py INPUT_DIR OUTPUT_DIR [
 | `--convert_delay MS` | Frame delay in milliseconds (default: 100) |
 | `--convert_loop N` | Number of times the GIF should loop (`0` = infinite) |
 | `--log_file FILE` | Log file to write list of included images and detected time gaps |
+| `--timezone ZONE` | Timezone for timestamp overlay (default: `UTC`, e.g., `America/Chicago`) |
 
 ### Example
 
 ```bash
-python goesgif_with_satellite_filter_and_gap_detection.py ./images ./gifs \
+python goesgif_timestamp_overlay.py ./images ./gifs \
   --time_threshold 36 \
   --resize_percentage 50 \
   --region FD \
   --channels CH13 \
   --satellites GOES19 \
   --include_enhanced \
-  --log_file goesgif.log
+  --log_file goesgif.log \
+  --timezone America/Chicago
 ```
 
-This will create a GIF for `GOES19` Full Disk `CH13` images (including enhanced versions) within the last 36 hours, resize them to 50%, and log the process to `goesgif.log`.
+This will create a GIF for `GOES19` Full Disk `CH13` images (including enhanced versions) within the last 36 hours, resize them to 50%, and overlay timestamps in the Central Time zone.
