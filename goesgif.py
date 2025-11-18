@@ -3,6 +3,10 @@ import sys
 import argparse
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+try:
+    from zoneinfo import ZoneInfoNotFoundError
+except ImportError:
+    from zoneinfo._common import ZoneInfoNotFoundError
 from wand.image import Image as WandImage
 from wand.drawing import Drawing
 from wand.color import Color
@@ -40,9 +44,16 @@ def draw_timestamp(img, timestamp, tz_label):
 def create_gifs(files, output_dir, resize_percentage, region, channels,
                 include_enhanced, convert_delay, convert_loop, log_file, user_timezone):
     grouped = defaultdict(list)
-    log = open(log_file, 'w') if log_file else None
+    log = open(log_file, 'w', encoding='utf-8') if log_file else None
 
-    tz = ZoneInfo(user_timezone)
+    try:
+        tz = ZoneInfo(user_timezone)
+    except ZoneInfoNotFoundError:
+        print(f"Error: Timezone '{user_timezone}' not found.")
+        print("This may be because the 'tzdata' package is not installed.")
+        print("Install it with: pip install tzdata")
+        print("Common timezone examples: UTC, America/New_York, America/Chicago, Europe/London")
+        sys.exit(1)
     tz_label = tz.key.split("/")[-1].replace("_", " ")
 
     for file_path, timestamp, satellite in files:
@@ -89,7 +100,8 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 log.write(f"{file_path} -> {output_file}\n")
                 if last_time:
                     gap = (timestamp - last_time).total_seconds()
-                    if gap > convert_delay / 1000.0 + 300:
+                    # GOES images are typically 30 minutes apart, so only warn about gaps > 45 minutes
+                    if gap > 2700:  # 45 minutes in seconds
                         log.write(f"  ⚠ Gap detected: {gap/60:.1f} min between frames\n")
                 last_time = timestamp
 

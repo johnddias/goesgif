@@ -1,3 +1,4 @@
 # requirements.txt
 wand==0.6.6
 progressbar==2.5
+tzdata
