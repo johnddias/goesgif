@@ -11,7 +11,7 @@ from wand.image import Image as WandImage
 from wand.drawing import Drawing
 from wand.color import Color
 import re
-import progressbar
+from tqdm import tqdm
 from collections import defaultdict
 
 def find_images(time_threshold, input_dir, allowed_satellites):
@@ -73,8 +73,7 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
         grouped[key].append((file_path, timestamp))
 
     total_files = sum(len(g) for g in grouped.values())
-    bar = progressbar.ProgressBar(widgets=[progressbar.Percentage(), ' ', progressbar.Bar(), ' ', progressbar.ETA()], maxval=total_files)
-    bar.start()
+    bar = tqdm(total=total_files, unit='file', desc='Processing')
     count = 0
 
     for (satellite, img_region, img_channel), group in grouped.items():
@@ -106,7 +105,7 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 last_time = timestamp
 
             count += 1
-            bar.update(count)
+            bar.update(1)
 
         if frames:
             with WandImage() as gif:
@@ -117,7 +116,7 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 gif.loop = convert_loop
                 gif.save(filename=output_file)
 
-    bar.finish()
+    bar.close()
     if log:
         log.close()
 
