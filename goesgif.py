@@ -83,21 +83,13 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
 
         frames = []
         last_time = None
-        target_dimensions = None
-        resize_factor = resize_percentage / 100.0
 
         for file_path, timestamp in group:
-            if target_dimensions is None:
-                with WandImage(filename=file_path) as probe:
-                    target_dimensions = (
-                        max(1, int(probe.width * resize_factor)),
-                        max(1, int(probe.height * resize_factor))
-                    )
-
-            with WandImage() as img:
-                img.options['jpeg:size'] = f"{target_dimensions[0]}x{target_dimensions[1]}"
-                img.read(filename=file_path)
-                img.resize(target_dimensions[0], target_dimensions[1])
+            with WandImage(filename=file_path) as img:
+                img.resize(
+                    int(img.width * (resize_percentage / 100)),
+                    int(img.height * (resize_percentage / 100))
+                )
                 local_time = timestamp.astimezone(tz)
                 draw_timestamp(img, local_time, tz_label)
                 img.delay = convert_delay // 10
