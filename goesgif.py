@@ -41,8 +41,41 @@ def draw_timestamp(img, timestamp, tz_label):
         draw.text(10, img.height - 10, timestamp_str)
         draw(img)
 
+def crop_gulf_closeup(img):
+    """
+    Crop the Gulf of Mexico and Southeast US region from a GOES full disk image.
+    This region includes the Gulf of Mexico, Florida, and the Southeast US coast.
+    
+    Args:
+        img: Wand Image object (full disk image)
+    
+    Returns:
+        Wand Image object (cropped closeup)
+    """
+    width = img.width
+    height = img.height
+    
+    # Define crop region as percentages of full disk image
+    # These coordinates approximate the Gulf/Southeast US region:
+    # - Left edge: ~50% (longitude ~-100°W)
+    # - Top edge: ~45% (latitude ~36°N)
+    # - Width: ~40% (extends to ~-75°W)
+    # - Height: ~25% (extends to ~24°N)
+    left = int(width * 0.50)
+    top = int(height * 0.45)
+    crop_width = int(width * 0.40)
+    crop_height = int(height * 0.25)
+    
+    # Ensure we don't exceed image bounds
+    crop_width = min(crop_width, width - left)
+    crop_height = min(crop_height, height - top)
+    
+    # Crop the image
+    img.crop(left=left, top=top, width=crop_width, height=crop_height)
+    return img
+
 def create_gifs(files, output_dir, resize_percentage, region, channels,
-                include_enhanced, convert_delay, convert_loop, log_file, user_timezone):
+                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False):
     grouped = defaultdict(list)
     log = open(log_file, 'w', encoding='utf-8') if log_file else None
 
@@ -77,15 +110,28 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
     count = 0
 
     for (satellite, img_region, img_channel), group in grouped.items():
-        output_folder = os.path.join(output_dir, satellite, img_region, img_channel)
+        # Determine if we should apply closeup cropping
+        apply_closeup = closeup and img_region == 'FD'
+        
+        # Create appropriate output folder and filename
+        if apply_closeup:
+            output_folder = os.path.join(output_dir, satellite, img_region, img_channel, 'closeup')
+            output_file = os.path.join(output_folder, f"output_{satellite}_{img_region}_{img_channel}_closeup.gif")
+        else:
+            output_folder = os.path.join(output_dir, satellite, img_region, img_channel)
+            output_file = os.path.join(output_folder, f"output_{satellite}_{img_region}_{img_channel}.gif")
+        
         os.makedirs(output_folder, exist_ok=True)
-        output_file = os.path.join(output_folder, f"output_{satellite}_{img_region}_{img_channel}.gif")
 
         frames = []
         last_time = None
 
         for file_path, timestamp in group:
             with WandImage(filename=file_path) as img:
+                # Apply closeup crop if enabled and this is a full disk image
+                if apply_closeup:
+                    crop_gulf_closeup(img)
+                
                 img.resize(
                     int(img.width * (resize_percentage / 100)),
                     int(img.height * (resize_percentage / 100))
@@ -134,6 +180,7 @@ def main():
     parser.add_argument('--log_file', type=str, default=None, help='Path to log file listing included images and gaps')
     parser.add_argument('--satellites', type=str, default='all', help='Comma-separated list of satellites to include (e.g., GOES18,GOES19)')
     parser.add_argument('--timezone', type=str, default='UTC', help='Timezone for timestamp overlay (default: UTC)')
+    parser.add_argument('--closeup', action='store_true', help='Create closeup GIFs of Gulf/Southeast US region from full disk images')
 
     args = parser.parse_args()
 
@@ -151,7 +198,7 @@ def main():
 
     print("Creating GIFs...")
     create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
-                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone)
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
     if args.log_file:
