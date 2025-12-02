@@ -123,8 +123,8 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
         
         os.makedirs(output_folder, exist_ok=True)
 
-        frames = []
         last_time = None
+        gif = None
 
         for file_path, timestamp in group:
             with WandImage(filename=file_path) as img:
@@ -139,7 +139,13 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 local_time = timestamp.astimezone(tz)
                 draw_timestamp(img, local_time, tz_label)
                 img.delay = convert_delay // 10
-                frames.append(img.clone())
+                
+                # Stream frame directly to GIF instead of collecting in memory
+                if gif is None:
+                    gif = WandImage()
+                    gif.sequence.append(img.clone())
+                else:
+                    gif.sequence.append(img.clone())
 
             if log:
                 log.write(f"{file_path} -> {output_file}\n")
@@ -153,14 +159,14 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
             count += 1
             bar.update(1)
 
-        if frames:
-            with WandImage() as gif:
-                gif.sequence.extend(frames)
-                for frame in gif.sequence:
-                    frame.delay = convert_delay // 10
-                gif.type = 'optimize'
-                gif.loop = convert_loop
-                gif.save(filename=output_file)
+        if gif is not None:
+            # Set delay and optimization after all frames are added
+            for frame in gif.sequence:
+                frame.delay = convert_delay // 10
+            gif.type = 'optimize'
+            gif.loop = convert_loop
+            gif.save(filename=output_file)
+            gif.close()
 
     bar.close()
     if log:

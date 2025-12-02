@@ -25,6 +25,53 @@ pip install -r requirements.txt
 
 Make sure [ImageMagick](https://imagemagick.org) is installed and accessible (required by `wand`).
 
+## Docker Usage
+
+The application can be run in a Docker container, which automatically handles all dependencies including ImageMagick.
+
+### Building the Image
+
+```bash
+docker build -t goesgif .
+```
+
+### Running with Docker
+
+```bash
+docker run --rm \
+  -v /path/to/your/images:/app/input:ro \
+  -v /path/to/output:/app/output \
+  goesgif \
+  /app/input /app/output \
+  --time_threshold 36 \
+  --resize_percentage 50 \
+  --region FD \
+  --channels CH13 \
+  --satellites GOES19 \
+  --include_enhanced \
+  --log_file /app/output/goesgif.log \
+  --timezone America/Chicago
+```
+
+### Using Docker Compose
+
+1. Create directories for input, output, and logs:
+   ```bash
+   mkdir -p images output logs
+   ```
+
+2. Place your GOES images in the `images` directory
+
+3. Run with docker-compose:
+   ```bash
+   docker-compose up
+   ```
+
+4. Or override the default command:
+   ```bash
+   docker-compose run goesgif /app/input /app/output --time_threshold 36 --region FD
+   ```
+
 ## Usage
 
 ```bash

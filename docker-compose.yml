@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  goesgif:
+    build: .
+    volumes:
+      # Mount input directory containing GOES images
+      - ./images:/app/input:ro
+      # Mount output directory for generated GIFs
+      - ./output:/app/output
+      # Optional: mount log file location
+      - ./logs:/app/logs
+    command: >
+      /app/input /app/output
+      --time_threshold 24
+      --resize_percentage 25
+      --log_file /app/logs/goesgif.log
+    # Override command when running: docker-compose run goesgif /app/input /app/output --time_threshold 36 --region FD
+
+
+
