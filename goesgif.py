@@ -56,15 +56,16 @@ def crop_gulf_closeup(img):
     height = img.height
     
     # Define crop region as percentages of full disk image
-    # These coordinates approximate the Gulf/Southeast US region:
-    # - Left edge: ~50% (longitude ~-100°W)
-    # - Top edge: ~45% (latitude ~36°N)
-    # - Width: ~40% (extends to ~-75°W)
-    # - Height: ~25% (extends to ~24°N)
-    left = int(width * 0.50)
-    top = int(height * 0.45)
-    crop_width = int(width * 0.40)
-    crop_height = int(height * 0.25)
+    # For GOES full disk images, the Gulf of Mexico region is typically in the
+    # upper-left to upper-center area (west/north of center):
+    # - Left edge: ~25% (starts from west, capturing Gulf region)
+    # - Top edge: ~10% (starts from north, capturing full Southeast US including TN, SC, NC, AR)
+    # - Width: ~35% (extends east to cover Florida and Atlantic coast)
+    # - Height: ~35% (extends south to cover full Gulf region while including northern states)
+    left = int(width * 0.25)
+    top = int(height * 0.10)
+    crop_width = int(width * 0.35)
+    crop_height = int(height * 0.35)
     
     # Ensure we don't exceed image bounds
     crop_width = min(crop_width, width - left)
@@ -75,7 +76,7 @@ def crop_gulf_closeup(img):
     return img
 
 def create_gifs(files, output_dir, resize_percentage, region, channels,
-                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False):
+                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False, closeup_resize_percentage=None):
     grouped = defaultdict(list)
     log = open(log_file, 'w', encoding='utf-8') if log_file else None
 
@@ -131,10 +132,14 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 # Apply closeup crop if enabled and this is a full disk image
                 if apply_closeup:
                     crop_gulf_closeup(img)
+                    # Use closeup-specific resize percentage if provided, otherwise use default
+                    actual_resize = closeup_resize_percentage if closeup_resize_percentage is not None else resize_percentage
+                else:
+                    actual_resize = resize_percentage
                 
                 img.resize(
-                    int(img.width * (resize_percentage / 100)),
-                    int(img.height * (resize_percentage / 100))
+                    int(img.width * (actual_resize / 100)),
+                    int(img.height * (actual_resize / 100))
                 )
                 local_time = timestamp.astimezone(tz)
                 draw_timestamp(img, local_time, tz_label)
@@ -187,6 +192,7 @@ def main():
     parser.add_argument('--satellites', type=str, default='all', help='Comma-separated list of satellites to include (e.g., GOES18,GOES19)')
     parser.add_argument('--timezone', type=str, default='UTC', help='Timezone for timestamp overlay (default: UTC)')
     parser.add_argument('--closeup', action='store_true', help='Create closeup GIFs of Gulf/Southeast US region from full disk images')
+    parser.add_argument('--closeup_resize_percentage', type=int, default=None, help='Resize percentage for closeup GIFs (default: uses --resize_percentage)')
 
     args = parser.parse_args()
 
@@ -204,7 +210,7 @@ def main():
 
     print("Creating GIFs...")
     create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
-                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup)
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup, args.closeup_resize_percentage)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
     if args.log_file:
