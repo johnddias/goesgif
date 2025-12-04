@@ -34,11 +34,17 @@ def find_images(time_threshold, input_dir, allowed_satellites):
 def draw_timestamp(img, timestamp, tz_label):
     timestamp_str = timestamp.strftime(f"%Y-%m-%d %H:%M {tz_label}")
     with Drawing() as draw:
-        draw.font_size = 20
+        # Scale font size based on image height (approximately 1.5% of image height)
+        # This ensures consistent relative size across different resize percentages
+        font_size = max(12, int(img.height * 0.015))
+        draw.font_size = font_size
         draw.fill_color = Color("white")
         draw.stroke_color = Color("black")
         draw.text_antialias = True
-        draw.text(10, img.height - 10, timestamp_str)
+        # Scale position based on image dimensions
+        margin_x = max(5, int(img.width * 0.005))
+        margin_y = max(5, int(img.height * 0.005))
+        draw.text(margin_x, img.height - margin_y, timestamp_str)
         draw(img)
 
 def crop_gulf_closeup(img):
@@ -141,6 +147,9 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                     int(img.width * (actual_resize / 100)),
                     int(img.height * (actual_resize / 100))
                 )
+                # Ensure timestamp is timezone-aware before conversion
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=timezone.utc)
                 local_time = timestamp.astimezone(tz)
                 draw_timestamp(img, local_time, tz_label)
                 img.delay = convert_delay // 10
