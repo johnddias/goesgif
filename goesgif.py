@@ -31,12 +31,13 @@ def find_images(time_threshold, input_dir, allowed_satellites):
     files.sort(key=lambda x: x[1])
     return files
 
-def draw_timestamp(img, timestamp, tz_label):
+def draw_timestamp(img, timestamp, tz_label, timestamp_scale_factor=1.0):
     timestamp_str = timestamp.strftime(f"%Y-%m-%d %H:%M {tz_label}")
     with Drawing() as draw:
-        # Scale font size based on image height (approximately 1.5% of image height)
-        # This ensures consistent relative size across different resize percentages
-        font_size = max(12, int(img.height * 0.015))
+        # Scale font size based on image height and user-defined scale factor
+        # Base size is 1.5% of image height, with minimum of 12px
+        base_font_size = int(img.height * 0.015 * timestamp_scale_factor)
+        font_size = max(12, base_font_size)
         draw.font_size = font_size
         draw.fill_color = Color("white")
         draw.stroke_color = Color("black")
@@ -82,7 +83,7 @@ def crop_gulf_closeup(img):
     return img
 
 def create_gifs(files, output_dir, resize_percentage, region, channels,
-                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False, closeup_resize_percentage=None):
+                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False, closeup_resize_percentage=None, timestamp_scale_factor=1.0):
     grouped = defaultdict(list)
     log = open(log_file, 'w', encoding='utf-8') if log_file else None
 
@@ -151,7 +152,7 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
                 if timestamp.tzinfo is None:
                     timestamp = timestamp.replace(tzinfo=timezone.utc)
                 local_time = timestamp.astimezone(tz)
-                draw_timestamp(img, local_time, tz_label)
+                draw_timestamp(img, local_time, tz_label, timestamp_scale_factor)
                 img.delay = convert_delay // 10
                 
                 # Stream frame directly to GIF instead of collecting in memory
@@ -202,6 +203,7 @@ def main():
     parser.add_argument('--timezone', type=str, default='UTC', help='Timezone for timestamp overlay (default: UTC)')
     parser.add_argument('--closeup', action='store_true', help='Create closeup GIFs of Gulf/Southeast US region from full disk images')
     parser.add_argument('--closeup_resize_percentage', type=int, default=None, help='Resize percentage for closeup GIFs (default: uses --resize_percentage)')
+    parser.add_argument('--timestamp_scale_factor', type=float, default=1.0, help='Scale factor for timestamp font size (default: 1.0, range: 0.5-3.0 recommended)')
 
     args = parser.parse_args()
 
@@ -219,7 +221,7 @@ def main():
 
     print("Creating GIFs...")
     create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
-                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup, args.closeup_resize_percentage)
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup, args.closeup_resize_percentage, args.timestamp_scale_factor)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
     if args.log_file:
