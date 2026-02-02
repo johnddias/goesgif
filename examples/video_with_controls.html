@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GOES: Video Playback Example</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 2rem; }
+    .viewer { max-width: 720px; margin: 0 auto; }
+    .controls { margin-top: 0.5rem; display:flex; gap:0.5rem; align-items:center; }
+    button, input[type=range] { font-size: 0.95rem; }
+    pre.note { background:#f6f8fa; padding:0.75rem; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <div class="viewer">
+    <h1>GOES: Video Playback Example ✅</h1>
+
+    <p class="note"><strong>Note:</strong> Replace <code>OUTPUT_BASE</code> below with the actual base filename created by <code>goesgif.py</code> (for example <code>output_GOES18_FD_BAND</code>). When you run with <code>--create_video</code>, <code>.mp4</code> and <code>.webm</code> files are created alongside the <code>.gif</code>.</p>
+
+    <!--
+      Usage:
+        - Put this HTML in the same folder as your generated files, or edit the paths below.
+        - Example generated files: output_GOES18_FD_BAND.gif, output_GOES18_FD_BAND.mp4, output_GOES18_FD_BAND.webm
+    -->
+
+    <video id="satVideo" controls width="640" preload="metadata" poster="OUTPUT_BASE.gif">
+      <source src="OUTPUT_BASE.webm" type="video/webm">
+      <source src="OUTPUT_BASE.mp4" type="video/mp4">
+      <!-- Fallback to GIF for browsers that don't support the video sources -->
+      <img src="OUTPUT_BASE.gif" alt="Satellite animation" />
+    </video>
+
+    <div class="controls">
+      <button id="playPause">Play/Pause</button>
+      <label>Speed: <input id="rate" type="range" min="0.25" max="2" step="0.25" value="1"></label>
+      <label><input id="loop" type="checkbox"> Loop</label>
+      <a id="downloadMp4" href="OUTPUT_BASE.mp4" download>Download MP4</a>
+      <a id="downloadGif" href="OUTPUT_BASE.gif" download>Download GIF</a>
+    </div>
+
+    <p style="margin-top:1rem; color:#555;">If the video does not play, make sure your server is serving the <code>.mp4</code> and <code>.webm</code> files and that they exist next to the GIF.</p>
+  </div>
+
+  <script>
+    const video = document.getElementById('satVideo');
+    const playPause = document.getElementById('playPause');
+    const rate = document.getElementById('rate');
+    const loop = document.getElementById('loop');
+    const downloadMp4 = document.getElementById('downloadMp4');
+    const downloadGif = document.getElementById('downloadGif');
+
+    playPause.addEventListener('click', () => {
+      if (video.paused) video.play(); else video.pause();
+    });
+    rate.addEventListener('input', () => video.playbackRate = parseFloat(rate.value));
+    loop.addEventListener('change', () => video.loop = loop.checked);
+
+    // Update download URLs to match chosen base (convenience for quick copy/paste)
+    // You can replace OUTPUT_BASE here with the real filename programmatically if desired.
+  </script>
+</body>
+</html>

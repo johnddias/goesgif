@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GOES GIF & Video Example</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    .media { max-width: 800px; margin: 1rem 0; }
+    video, img { width: 100%; height: auto; display: block; }
+  </style>
+</head>
+<body>
+  <h1>GOES Animation Example</h1>
+  <p>Use the video player to get playback controls and better compression. The GIF is provided as a fallback for older browsers.</p>
+
+  <!-- Replace the filenames below with your generated files (same basename):
+       - output_GOES18_FD_...gif
+       - output_GOES18_FD_...mp4
+       - output_GOES18_FD_...webm
+  -->
+
+  <div class="media">
+    <video controls playsinline>
+      <source src="output_GOES18_FD_VIS.mp4" type="video/mp4">
+      <source src="output_GOES18_FD_VIS.webm" type="video/webm">
+      <!-- Fallback to GIF if video not supported -->
+      <img src="output_GOES18_FD_VIS.gif" alt="GOES animation">
+    </video>
+  </div>
+
+  <h2>Notes</h2>
+  <ul>
+    <li>For best browser compatibility provide both <code>.webm</code> and <code>.mp4</code> sources.</li>
+    <li>Use <code>--create_video</code> when running <code>goesgif.py</code> to create videos alongside GIFs.</li>
+    <li>Place this HTML in the same folder as your generated media files or adjust the <code>src</code> paths accordingly.</li>
+  </ul>
+</body>
+</html>

@@ -11,6 +11,8 @@ from wand.image import Image as WandImage
 from wand.drawing import Drawing
 from wand.color import Color
 import re
+import subprocess
+import shlex
 from tqdm import tqdm
 from collections import defaultdict
 
@@ -82,8 +84,34 @@ def crop_gulf_closeup(img):
     img.crop(left=left, top=top, width=crop_width, height=crop_height)
     return img
 
+def gif_to_videos(gif_path, mp4_path=None, webm_path=None):
+    """Convert a GIF to MP4 (H.264) and WebM (VP9) using ffmpeg.
+
+    Requires system ffmpeg to be installed (the Dockerfile is updated to include it).
+    """
+    import os
+    if mp4_path is None:
+        mp4_path = os.path.splitext(gif_path)[0] + ".mp4"
+    if webm_path is None:
+        webm_path = os.path.splitext(gif_path)[0] + ".webm"
+
+    # MP4 (H.264) - ensure even dimensions and faststart for web playback
+    cmd_mp4 = f'ffmpeg -y -i {shlex.quote(gif_path)} -movflags +faststart -pix_fmt yuv420p -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -crf 18 {shlex.quote(mp4_path)}'
+    try:
+        subprocess.run(shlex.split(cmd_mp4), check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: ffmpeg MP4 conversion failed for {gif_path}: {e}")
+
+    # WebM (VP9)
+    cmd_webm = f'ffmpeg -y -i {shlex.quote(gif_path)} -c:v libvpx-vp9 -b:v 0 -crf 30 {shlex.quote(webm_path)}'
+    try:
+        subprocess.run(shlex.split(cmd_webm), check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: ffmpeg WebM conversion failed for {gif_path}: {e}")
+
+
 def create_gifs(files, output_dir, resize_percentage, region, channels,
-                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False, closeup_resize_percentage=None, timestamp_scale_factor=1.0):
+                include_enhanced, convert_delay, convert_loop, log_file, user_timezone, closeup=False, closeup_resize_percentage=None, timestamp_scale_factor=1.0, create_video=False):
     grouped = defaultdict(list)
     log = open(log_file, 'w', encoding='utf-8') if log_file else None
 
@@ -181,6 +209,11 @@ def create_gifs(files, output_dir, resize_percentage, region, channels,
             gif.type = 'optimize'
             gif.loop = convert_loop
             gif.save(filename=output_file)
+            if create_video:
+                try:
+                    gif_to_videos(output_file)
+                except Exception as e:
+                    print(f"Warning: video conversion failed for {output_file}: {e}")
             gif.close()
 
     bar.close()
@@ -204,6 +237,7 @@ def main():
     parser.add_argument('--closeup', action='store_true', help='Create closeup GIFs of Gulf/Southeast US region from full disk images')
     parser.add_argument('--closeup_resize_percentage', type=int, default=None, help='Resize percentage for closeup GIFs (default: uses --resize_percentage)')
     parser.add_argument('--timestamp_scale_factor', type=float, default=1.0, help='Scale factor for timestamp font size (default: 1.0, range: 0.5-3.0 recommended)')
+    parser.add_argument('--create_video', action='store_true', help='Create MP4 and WebM video files from the generated GIFs (requires ffmpeg)')
 
     args = parser.parse_args()
 
@@ -221,9 +255,11 @@ def main():
 
     print("Creating GIFs...")
     create_gifs(files, args.output_dir, args.resize_percentage, args.region, args.channels,
-                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup, args.closeup_resize_percentage, args.timestamp_scale_factor)
+                args.include_enhanced, args.convert_delay, args.convert_loop, args.log_file, args.timezone, args.closeup, args.closeup_resize_percentage, args.timestamp_scale_factor, args.create_video)
 
     print(f"GIFs created in {args.output_dir} with resize percentage {args.resize_percentage}%")
+    if args.create_video:
+        print("MP4/WebM videos created alongside GIFs (if ffmpeg is available in the environment)")
     if args.log_file:
         print(f"Log written to {args.log_file}")
 
