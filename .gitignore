@@ -161,3 +161,7 @@ cython_debug/
 
 # GOES output files (too large for GitHub)
 GOES19/
+GOES18/
+
+# Claude configuration files
+.claude 
